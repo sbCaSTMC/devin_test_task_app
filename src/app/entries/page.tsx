@@ -36,6 +36,7 @@ export default function EntriesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
+  const [sortOption, setSortOption] = useState<string>("date-desc");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [formData, setFormData] = useState({
@@ -84,10 +85,26 @@ export default function EntriesPage() {
       result = result.filter((e) => new Date(e.date) >= start);
     }
 
-    return result.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-  }, [entries, searchQuery, tagFilter, periodFilter]);
+    switch (sortOption) {
+      case "date-asc":
+        return result.sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+      case "value-desc":
+        return result.sort((a, b) => b.value - a.value);
+      case "value-asc":
+        return result.sort((a, b) => a.value - b.value);
+      case "title-asc":
+        return result.sort((a, b) => a.title.localeCompare(b.title, "ja"));
+      case "title-desc":
+        return result.sort((a, b) => b.title.localeCompare(a.title, "ja"));
+      case "date-desc":
+      default:
+        return result.sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+    }
+  }, [entries, searchQuery, tagFilter, periodFilter, sortOption]);
 
   const openAddDialog = () => {
     setEditingEntry(null);
@@ -174,7 +191,7 @@ export default function EntriesPage() {
           <CardTitle>検索・フィルタ</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <Label htmlFor="search">キーワード検索</Label>
               <Input
@@ -211,6 +228,22 @@ export default function EntriesPage() {
                   <SelectItem value="7">過去7日</SelectItem>
                   <SelectItem value="30">過去30日</SelectItem>
                   <SelectItem value="90">過去90日</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>並び替え</Label>
+              <Select value={sortOption} onValueChange={setSortOption}>
+                <SelectTrigger>
+                  <SelectValue placeholder="並び替えを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-desc">日付（新しい順）</SelectItem>
+                  <SelectItem value="date-asc">日付（古い順）</SelectItem>
+                  <SelectItem value="value-desc">値（大きい順）</SelectItem>
+                  <SelectItem value="value-asc">値（小さい順）</SelectItem>
+                  <SelectItem value="title-asc">タイトル（A→Z）</SelectItem>
+                  <SelectItem value="title-desc">タイトル（Z→A）</SelectItem>
                 </SelectContent>
               </Select>
             </div>
