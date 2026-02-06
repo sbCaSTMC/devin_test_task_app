@@ -27,6 +27,7 @@ import {
   deleteEntry,
   generateId,
 } from "@/lib/storage";
+import { sortEntries, SortOption } from "@/lib/sort";
 import { Entry } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -36,7 +37,7 @@ export default function EntriesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<string>("all");
-  const [sortOption, setSortOption] = useState<string>("date-desc");
+  const [sortOption, setSortOption] = useState<SortOption>("date-desc");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [formData, setFormData] = useState({
@@ -85,25 +86,7 @@ export default function EntriesPage() {
       result = result.filter((e) => new Date(e.date) >= start);
     }
 
-    switch (sortOption) {
-      case "date-asc":
-        return result.sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-      case "value-desc":
-        return result.sort((a, b) => b.value - a.value);
-      case "value-asc":
-        return result.sort((a, b) => a.value - b.value);
-      case "title-asc":
-        return result.sort((a, b) => a.title.localeCompare(b.title, "ja"));
-      case "title-desc":
-        return result.sort((a, b) => b.title.localeCompare(a.title, "ja"));
-      case "date-desc":
-      default:
-        return result.sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-    }
+    return sortEntries(result, sortOption);
   }, [entries, searchQuery, tagFilter, periodFilter, sortOption]);
 
   const openAddDialog = () => {
