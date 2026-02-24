@@ -5,6 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -18,14 +26,23 @@ import {
   loadDummyData,
   resetData,
   exportData,
+  exportDataAsCsv,
   importData,
+  importCsvData,
+  previewImportData,
 } from "@/lib/storage";
+import { Entry } from "@/lib/types";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
   const [entryCount, setEntryCount] = useState(0);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [importMode, setImportMode] = useState<"replace" | "merge">("replace");
+  const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ entries: Entry[]; count: number } | null>(null);
+  const [pendingImportContent, setPendingImportContent] = useState<string>("");
+  const [pendingImportFormat, setPendingImportFormat] = useState<"json" | "csv">("json");
 
   const initializeState = useCallback(() => {
     setEntryCount(getEntries().length);
@@ -50,7 +67,7 @@ export default function SettingsPage() {
     toast.success("データをリセットしました");
   };
 
-  const handleExport = () => {
+  const handleExportJson = () => {
     const data = exportData();
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -61,25 +78,65 @@ export default function SettingsPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("データをエクスポートしました");
+    toast.success("JSONファイルをエクスポートしました");
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExportCsv = () => {
+    const data = exportDataAsCsv();
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + data], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `personal_dashboard_export_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("CSVファイルをエクスポートしました");
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const format = file.name.endsWith(".csv") ? "csv" : "json";
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      if (importData(content)) {
-        setEntryCount(getEntries().length);
-        toast.success("データをインポートしました");
+      const preview = previewImportData(content, format);
+      if (preview) {
+        setImportPreview(preview);
+        setPendingImportContent(content);
+        setPendingImportFormat(format);
+        setIsImportPreviewOpen(true);
       } else {
-        toast.error("インポートに失敗しました。ファイル形式を確認してください。");
+        toast.error("ファイルの読み取りに失敗しました。形式を確認してください。");
       }
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const handleConfirmImport = () => {
+    let success = false;
+    if (pendingImportFormat === "csv") {
+      success = importCsvData(pendingImportContent, importMode);
+    } else {
+      success = importData(pendingImportContent, importMode);
+    }
+
+    if (success) {
+      setEntryCount(getEntries().length);
+      const modeLabel = importMode === "merge" ? "マージ" : "置換";
+      toast.success(`データを${modeLabel}モードでインポートしました`);
+    } else {
+      toast.error("インポートに失敗しました。ファイル形式を確認してください。");
+    }
+
+    setIsImportPreviewOpen(false);
+    setImportPreview(null);
+    setPendingImportContent("");
   };
 
   const toggleDarkMode = () => {
@@ -123,34 +180,67 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>エクスポート / インポート</CardTitle>
+          <CardTitle>エクスポート</CardTitle>
           <CardDescription>
-            データをJSON形式でバックアップ・復元できます
+            データをファイルとしてダウンロードできます
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-4">
-            <Button onClick={handleExport} variant="outline">
+            <Button onClick={handleExportJson} variant="outline">
               エクスポート (JSON)
             </Button>
-            <div>
-              <Label htmlFor="import-file" className="cursor-pointer">
-                <Button variant="outline" asChild>
-                  <span>インポート (JSON)</span>
-                </Button>
-              </Label>
-              <Input
-                id="import-file"
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                className="hidden"
-              />
-            </div>
+            <Button onClick={handleExportCsv} variant="outline">
+              エクスポート (CSV)
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            localStorageキー名: <code className="bg-muted px-1 rounded">personal_dashboard_v1</code>
+            JSONはバックアップ・復元に、CSVはExcelなどの表計算ソフトでの利用に適しています。
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>インポート</CardTitle>
+          <CardDescription>
+            JSONまたはCSVファイルからデータを読み込めます
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Label className="text-sm font-medium whitespace-nowrap">インポートモード:</Label>
+              <Select value={importMode} onValueChange={(v) => setImportMode(v as "replace" | "merge")}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="replace">置換（既存データを上書き）</SelectItem>
+                  <SelectItem value="merge">マージ（既存データに追加）</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {importMode === "replace"
+                ? "既存のデータをすべて削除し、インポートしたデータで置き換えます。"
+                : "既存のデータを保持したまま、新しいデータを追加します（IDが重複するデータはスキップされます）。"}
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="import-file" className="cursor-pointer">
+              <Button variant="outline" asChild>
+                <span>ファイルを選択 (JSON / CSV)</span>
+              </Button>
+            </Label>
+            <Input
+              id="import-file"
+              type="file"
+              accept=".json,.csv"
+              onChange={handleImportFile}
+              className="hidden"
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -185,6 +275,74 @@ export default function SettingsPage() {
             </Button>
             <Button variant="destructive" onClick={handleReset}>
               リセット
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>インポートプレビュー</DialogTitle>
+            <DialogDescription>
+              インポートするデータの内容を確認してください。
+            </DialogDescription>
+          </DialogHeader>
+          {importPreview && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{pendingImportFormat.toUpperCase()}</Badge>
+                <span className="text-sm text-muted-foreground">
+                  {importPreview.count} 件のデータ
+                </span>
+                <Badge variant={importMode === "replace" ? "destructive" : "default"}>
+                  {importMode === "replace" ? "置換" : "マージ"}
+                </Badge>
+              </div>
+              <div className="max-h-60 overflow-y-auto rounded-md border p-3 space-y-2">
+                {importPreview.entries.slice(0, 10).map((entry, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{entry.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(entry.date).toLocaleDateString("ja-JP")} / 値: {entry.value}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 ml-2">
+                      {entry.tags.map((tag, j) => (
+                        <Badge key={j} variant="outline" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {importPreview.count > 10 && (
+                  <p className="text-xs text-muted-foreground text-center pt-1">
+                    ...他 {importPreview.count - 10} 件
+                  </p>
+                )}
+              </div>
+              {importMode === "replace" && (
+                <p className="text-sm text-destructive">
+                  既存のデータ（{entryCount} 件）はすべて削除されます。
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsImportPreviewOpen(false);
+                setImportPreview(null);
+                setPendingImportContent("");
+              }}
+            >
+              キャンセル
+            </Button>
+            <Button onClick={handleConfirmImport}>
+              インポート実行
             </Button>
           </DialogFooter>
         </DialogContent>

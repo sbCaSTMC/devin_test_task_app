@@ -48,16 +48,138 @@ export function exportData(): string {
   return JSON.stringify({ entries }, null, 2);
 }
 
-export function importData(jsonString: string): boolean {
+export function exportDataAsCsv(): string {
+  const entries = getEntries();
+  const header = "id,title,note,tags,date,value";
+  const rows = entries.map((e) => {
+    const escapeCsv = (val: string) => {
+      if (val.includes('"') || val.includes(",") || val.includes("\n")) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+    return [
+      escapeCsv(e.id),
+      escapeCsv(e.title),
+      escapeCsv(e.note || ""),
+      escapeCsv(e.tags.join(";")),
+      escapeCsv(e.date),
+      String(e.value),
+    ].join(",");
+  });
+  return [header, ...rows].join("\n");
+}
+
+export function importData(jsonString: string, mode: "replace" | "merge" = "replace"): boolean {
   try {
     const data = JSON.parse(jsonString);
     if (data.entries && Array.isArray(data.entries)) {
-      saveEntries(data.entries);
+      if (mode === "merge") {
+        const existing = getEntries();
+        const existingIds = new Set(existing.map((e) => e.id));
+        const newEntries = data.entries.filter((e: Entry) => !existingIds.has(e.id));
+        saveEntries([...existing, ...newEntries]);
+      } else {
+        saveEntries(data.entries);
+      }
       return true;
     }
     return false;
   } catch {
     return false;
+  }
+}
+
+export function parseCsvToEntries(csvString: string): Entry[] | null {
+  try {
+    const lines = csvString.trim().split("\n");
+    if (lines.length < 2) return null;
+
+    const header = lines[0].toLowerCase();
+    if (!header.includes("title") || !header.includes("date")) return null;
+
+    const entries: Entry[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const fields = parseCsvLine(lines[i]);
+      if (fields.length < 6) continue;
+      entries.push({
+        id: fields[0] || generateId(),
+        title: fields[1],
+        note: fields[2] || undefined,
+        tags: fields[3] ? fields[3].split(";").filter(Boolean) : [],
+        date: fields[4],
+        value: Number(fields[5]) || 0,
+      });
+    }
+    return entries.length > 0 ? entries : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"' && i + 1 < line.length && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ",") {
+        fields.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+  }
+  fields.push(current);
+  return fields;
+}
+
+export function importCsvData(csvString: string, mode: "replace" | "merge" = "replace"): boolean {
+  const parsed = parseCsvToEntries(csvString);
+  if (!parsed) return false;
+
+  if (mode === "merge") {
+    const existing = getEntries();
+    const existingIds = new Set(existing.map((e) => e.id));
+    const newEntries = parsed.filter((e) => !existingIds.has(e.id));
+    saveEntries([...existing, ...newEntries]);
+  } else {
+    saveEntries(parsed);
+  }
+  return true;
+}
+
+export function previewImportData(content: string, format: "json" | "csv"): { entries: Entry[]; count: number } | null {
+  try {
+    if (format === "json") {
+      const data = JSON.parse(content);
+      if (data.entries && Array.isArray(data.entries)) {
+        return { entries: data.entries, count: data.entries.length };
+      }
+      return null;
+    } else {
+      const entries = parseCsvToEntries(content);
+      if (entries) {
+        return { entries, count: entries.length };
+      }
+      return null;
+    }
+  } catch {
+    return null;
   }
 }
 
