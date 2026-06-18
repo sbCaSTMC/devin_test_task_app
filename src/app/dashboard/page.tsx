@@ -29,6 +29,7 @@ function initializeEntries(): Entry[] {
 export default function DashboardPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [period, setPeriod] = useState<7 | 30>(7);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(() => {
@@ -66,13 +67,18 @@ export default function DashboardPage() {
 
   const goalRate = Math.min(100, Math.round((thisWeekCount / 7) * 100));
 
+  const allTags = Array.from(new Set(entries.flatMap((e) => e.tags))).sort();
+
   const chartData = (() => {
+    const filteredEntries = selectedTag
+      ? entries.filter((e) => e.tags.includes(selectedTag))
+      : entries;
     const data: { date: string; count: number; value: number }[] = [];
     for (let i = period - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateStr = d.toDateString();
-      const dayEntries = entries.filter(
+      const dayEntries = filteredEntries.filter(
         (e) => new Date(e.date).toDateString() === dateStr
       );
       data.push({
@@ -163,6 +169,27 @@ export default function DashboardPage() {
               </Button>
             </div>
           </div>
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button
+                variant={selectedTag === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedTag(null)}
+              >
+                すべて
+              </Button>
+              {allTags.map((tag) => (
+                <Button
+                  key={tag}
+                  variant={selectedTag === tag ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedTag(tag)}
+                >
+                  {tag}
+                </Button>
+              ))}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
