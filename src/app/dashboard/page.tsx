@@ -10,6 +10,8 @@ import { Entry } from "@/lib/types";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -93,6 +95,19 @@ export default function DashboardPage() {
   const recentEntries = [...entries]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5);
+
+  const tagStats = (() => {
+    const map = new Map<string, { count: number; total: number }>();
+    for (const entry of entries) {
+      for (const tag of entry.tags) {
+        const prev = map.get(tag) ?? { count: 0, total: 0 };
+        map.set(tag, { count: prev.count + 1, total: prev.total + entry.value });
+      }
+    }
+    return Array.from(map.entries())
+      .map(([tag, { count, total }]) => ({ tag, count, total }))
+      .sort((a, b) => b.count - a.count);
+  })();
 
   if (isLoading) {
     return (
@@ -212,6 +227,53 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {tagStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>タグ別集計</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={tagStats}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="tag" fontSize={12} />
+                  <YAxis fontSize={12} />
+                  <Tooltip />
+                  <Bar
+                    dataKey="count"
+                    fill="var(--chart-1)"
+                    name="件数"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="total"
+                    fill="var(--chart-2)"
+                    name="合計値"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid gap-3 mt-4 sm:grid-cols-2 lg:grid-cols-3">
+              {tagStats.map((stat, index) => (
+                <div
+                  key={stat.tag}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 transition-all hover:bg-muted animate-in slide-in-from-bottom duration-300"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <Badge variant="secondary">{stat.tag}</Badge>
+                  <div className="flex gap-3 text-sm">
+                    <span className="text-muted-foreground">{stat.count} 件</span>
+                    <span className="font-semibold">{stat.total}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
