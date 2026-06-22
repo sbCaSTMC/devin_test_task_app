@@ -243,13 +243,13 @@ export default function DashboardPage() {
                   <Tooltip />
                   <Bar
                     dataKey="count"
-                    fill="hsl(var(--primary))"
+                    fill="var(--chart-1)"
                     name="件数"
                     radius={[4, 4, 0, 0]}
                   />
                   <Bar
                     dataKey="total"
-                    fill="hsl(var(--muted-foreground))"
+                    fill="var(--chart-2)"
                     name="合計値"
                     radius={[4, 4, 0, 0]}
                   />
