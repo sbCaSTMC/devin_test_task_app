@@ -30,6 +30,28 @@ import {
 import { Entry } from "@/lib/types";
 import { toast } from "sonner";
 
+const toDateInputValue = (isoDate: string) => {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return "";
+  const month = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+};
+
+const fromDateInputValue = (value: string, baseIsoDate?: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const base = baseIsoDate ? new Date(baseIsoDate) : new Date();
+  const time = Number.isNaN(base.getTime()) ? new Date() : base;
+  return new Date(
+    year,
+    month - 1,
+    day,
+    time.getHours(),
+    time.getMinutes(),
+    time.getSeconds()
+  ).toISOString();
+};
+
 export default function EntriesPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +66,7 @@ export default function EntriesPage() {
     note: "",
     tags: "",
     value: "",
+    date: "",
   });
 
   const loadData = useCallback(() => {
@@ -108,7 +131,13 @@ export default function EntriesPage() {
 
   const openAddDialog = () => {
     setEditingEntry(null);
-    setFormData({ title: "", note: "", tags: "", value: "" });
+    setFormData({
+      title: "",
+      note: "",
+      tags: "",
+      value: "",
+      date: toDateInputValue(new Date().toISOString()),
+    });
     setIsDialogOpen(true);
   };
 
@@ -119,6 +148,7 @@ export default function EntriesPage() {
       note: entry.note || "",
       tags: entry.tags.join(", "),
       value: entry.value.toString(),
+      date: toDateInputValue(entry.date),
     });
     setIsDialogOpen(true);
   };
@@ -129,17 +159,24 @@ export default function EntriesPage() {
       return;
     }
 
+    if (!formData.date) {
+      toast.error("日付を選択してください");
+      return;
+    }
+
     const tags = formData.tags
       .split(",")
       .map((t) => t.trim())
       .filter((t) => t);
     const value = parseInt(formData.value) || 0;
+    const date = fromDateInputValue(formData.date, editingEntry?.date);
 
     if (editingEntry) {
       updateEntry(editingEntry.id, {
         title: formData.title,
         note: formData.note || undefined,
         tags,
+        date,
         value,
       });
       toast.success("記録を更新しました");
@@ -149,7 +186,7 @@ export default function EntriesPage() {
         title: formData.title,
         note: formData.note || undefined,
         tags,
-        date: new Date().toISOString(),
+        date,
         value,
       };
       addEntry(newEntry);
@@ -345,6 +382,17 @@ export default function EntriesPage() {
                   setFormData({ ...formData, title: e.target.value })
                 }
                 placeholder="例: 朝のランニング"
+              />
+            </div>
+            <div>
+              <Label htmlFor="date">日付 *</Label>
+              <Input
+                id="date"
+                type="date"
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData({ ...formData, date: e.target.value })
+                }
               />
             </div>
             <div>
